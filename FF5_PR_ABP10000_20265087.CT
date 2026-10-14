@@ -1,0 +1,137 @@
+<?xml version='1.0' encoding='utf-8'?>
+<CheatTable CheatEngineTableVersion="45">
+  <CheatEntries>
+    <CheatEntry>
+      <ID>1</ID>
+      <Description>"戰鬥 ABP ×10,000（贏一場精通目前職業；取消勾選恢復倍率）"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+
+assert(getOpenedProcessID()~=0,'Attach to FINAL FANTASY V first')
+local base=getAddressSafe('GameAssembly.dll');assert(base,'GameAssembly.dll missing')
+local pe=base+readInteger(base+60)
+assert(readInteger(pe+8)==1738631357 and readInteger(pe+80)==40267776,'Requires FF5 PR Steam build 20265087')
+assert(LaunchMonoDataCollector(),'Mono data collector unavailable')
+local function cls(name)
+ local c=mono_findClass('Last.Data.User',name);assert(c and c~=0,'Class missing: '..name);return c
+end
+local function fld(c,name,expectedType)
+ for _,v in ipairs(mono_class_enumFields(c,true) or {}) do
+  if v.name==name then assert(not expectedType or v.typename==expectedType,'Unexpected field type: '..name);return v end
+ end
+ error('Field missing: '..name)
+end
+local function ptr(a)
+ local p=readPointer(a);assert(p and p&gt;0x10000,'Invalid pointer');return p
+end
+local function list(o,max)
+ local c=mono_object_getClass(o);assert(c and c~=0,'Invalid list')
+ local count=readInteger(o+fld(c,'_size','System.Int32').offset)
+ assert(count and count&gt;=0 and count&lt;=max,'Unexpected list size')
+ local a=ptr(o+fld(c,'_items').offset);local length=readInteger(a+0x18)
+ assert(length and length&gt;=count and length&lt;=512,'Invalid list capacity')
+ local r={};for i=0,count-1 do r[#r+1]=ptr(a+0x20+i*8) end;return r
+end
+local um=mono_findClass('Last.Management','UserDataManager');assert(um and um~=0,'UserDataManager missing')
+local instance=fld(um,'instance');local u=mono_class_getStaticFieldValue(um,instance.field)
+assert(u and u&gt;0x10000,'Load your save first')
+local chars=list(ptr(u+fld(um,'&lt;OwnedCharacterList&gt;k__BackingField').offset),16)
+local chClass=cls('OwnedCharacterData');local chSave=cls('OwnedCharacterSaveData')
+local jobClass=cls('OwnedJobData');local jobSave=cls('OwnedJobSaveData')
+local chSaveOffset=fld(chClass,'saveData').offset
+local chJobsOffset=fld(chClass,'&lt;OwnedJobDataList&gt;k__BackingField').offset
+local idOffset=fld(chSave,'id','System.Int32').offset
+local enabledOffset=fld(chSave,'isEnableCorps','System.Boolean').offset
+local jobSaveOffset=fld(jobClass,'saveData').offset
+local jobIdOffset=fld(jobSave,'id','System.Int32').offset
+local abpOffset=fld(jobSave,'currentProficiency','System.Int32').offset
+local levelOffset=fld(jobSave,'level','System.Int32').offset
+
+local settings=ptr(u+fld(um,'&lt;CheatSettingsData&gt;k__BackingField').offset)
+local settingsClass=mono_findClass('Last.Data','CheatSettingsData')
+assert(settingsClass and settingsClass~=0 and mono_object_getClass(settings)==settingsClass,'Unexpected boost settings object')
+local rateField=fld(settingsClass,'abpRate','System.Single')
+local rateAddress=settings+rateField.offset
+local before=readFloat(rateAddress)
+assert(before and before==before and before&gt;=0 and before&lt;=10000,'Invalid ABP rate')
+
+local previous=FF5_ABP_RATE_STATE
+if previous and previous.pid==getOpenedProcessID() then error('ABP multiplier already active; disable it first') end
+assert(writeFloat(rateAddress,10000),'ABP multiplier write failed')
+assert(readFloat(rateAddress)==10000,'ABP multiplier verification failed')
+FF5_ABP_RATE_STATE={pid=getOpenedProcessID(),original=before,target=10000}
+print('ABP RATE VERIFIED: '..before..' -&gt; 10000')
+showMessage('戰鬥 ABP 倍率已設為 10,000。贏一場有 ABP 獎勵的戰鬥，讓遊戲自行提升目前職業並學習能力。測試完取消勾選，恢復原本倍率。')
+
+{$asm}
+[DISABLE]
+{$lua}
+if syntaxcheck then return end
+
+local state=FF5_ABP_RATE_STATE
+if not state then return end
+if state.pid~=getOpenedProcessID() then FF5_ABP_RATE_STATE=nil;return end
+
+assert(getOpenedProcessID()~=0,'Attach to FINAL FANTASY V first')
+local base=getAddressSafe('GameAssembly.dll');assert(base,'GameAssembly.dll missing')
+local pe=base+readInteger(base+60)
+assert(readInteger(pe+8)==1738631357 and readInteger(pe+80)==40267776,'Requires FF5 PR Steam build 20265087')
+assert(LaunchMonoDataCollector(),'Mono data collector unavailable')
+local function cls(name)
+ local c=mono_findClass('Last.Data.User',name);assert(c and c~=0,'Class missing: '..name);return c
+end
+local function fld(c,name,expectedType)
+ for _,v in ipairs(mono_class_enumFields(c,true) or {}) do
+  if v.name==name then assert(not expectedType or v.typename==expectedType,'Unexpected field type: '..name);return v end
+ end
+ error('Field missing: '..name)
+end
+local function ptr(a)
+ local p=readPointer(a);assert(p and p&gt;0x10000,'Invalid pointer');return p
+end
+local function list(o,max)
+ local c=mono_object_getClass(o);assert(c and c~=0,'Invalid list')
+ local count=readInteger(o+fld(c,'_size','System.Int32').offset)
+ assert(count and count&gt;=0 and count&lt;=max,'Unexpected list size')
+ local a=ptr(o+fld(c,'_items').offset);local length=readInteger(a+0x18)
+ assert(length and length&gt;=count and length&lt;=512,'Invalid list capacity')
+ local r={};for i=0,count-1 do r[#r+1]=ptr(a+0x20+i*8) end;return r
+end
+local um=mono_findClass('Last.Management','UserDataManager');assert(um and um~=0,'UserDataManager missing')
+local instance=fld(um,'instance');local u=mono_class_getStaticFieldValue(um,instance.field)
+assert(u and u&gt;0x10000,'Load your save first')
+local chars=list(ptr(u+fld(um,'&lt;OwnedCharacterList&gt;k__BackingField').offset),16)
+local chClass=cls('OwnedCharacterData');local chSave=cls('OwnedCharacterSaveData')
+local jobClass=cls('OwnedJobData');local jobSave=cls('OwnedJobSaveData')
+local chSaveOffset=fld(chClass,'saveData').offset
+local chJobsOffset=fld(chClass,'&lt;OwnedJobDataList&gt;k__BackingField').offset
+local idOffset=fld(chSave,'id','System.Int32').offset
+local enabledOffset=fld(chSave,'isEnableCorps','System.Boolean').offset
+local jobSaveOffset=fld(jobClass,'saveData').offset
+local jobIdOffset=fld(jobSave,'id','System.Int32').offset
+local abpOffset=fld(jobSave,'currentProficiency','System.Int32').offset
+local levelOffset=fld(jobSave,'level','System.Int32').offset
+
+local settings=ptr(u+fld(um,'&lt;CheatSettingsData&gt;k__BackingField').offset)
+local settingsClass=mono_findClass('Last.Data','CheatSettingsData')
+assert(settingsClass and settingsClass~=0 and mono_object_getClass(settings)==settingsClass,'Unexpected boost settings object')
+local rateField=fld(settingsClass,'abpRate','System.Single')
+local rateAddress=settings+rateField.offset
+local before=readFloat(rateAddress)
+assert(before and before==before and before&gt;=0 and before&lt;=10000,'Invalid ABP rate')
+
+if before==state.target then
+ assert(writeFloat(rateAddress,state.original),'Cannot restore ABP rate')
+ assert(readFloat(rateAddress)==state.original,'ABP rate restore verification failed')
+end
+FF5_ABP_RATE_STATE=nil
+print('ABP multiplier disabled; current rate '..readFloat(rateAddress))
+
+{$asm}
+</AssemblerScript>
+    </CheatEntry>
+  </CheatEntries>
+  <UserdefinedSymbols />
+</CheatTable>
