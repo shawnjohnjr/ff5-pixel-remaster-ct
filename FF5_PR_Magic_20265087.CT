@@ -1,0 +1,1007 @@
+<?xml version='1.0' encoding='utf-8'?>
+<CheatTable CheatEngineTableVersion="45">
+  <CheatEntries>
+    <CheatEntry>
+      <ID>1</ID>
+      <Description>"白魔法：全部 18 招（須已解鎖對應職業；地圖上執行一次）"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+local function find(ns,cls,name,signature)
+ local c=mono_findClass(ns,cls)
+ assert(c and c~=0,'Class missing: '..cls)
+ for _,m in ipairs(mono_class_enumMethods(c)) do
+  if m.name==name and (not signature or mono_method_getSignature(m.method)==signature) then return m.method end
+ end
+ error('Method missing: '..cls..'.'..name)
+end
+local function call(m,obj,args)
+ local r,e=mono_invoke_method(0,m,obj or 0,args or {})
+ assert(e==nil,tostring(e))
+ return r
+end
+local function instance(ns,cls)
+ local c=mono_findClass(ns,cls)
+ local obj=mono_object_new(c)
+ assert(obj and obj~=0,'Cannot create '..cls)
+ call(find(ns,cls,'.ctor',''),obj)
+ return obj
+end
+local function setup()
+ assert(getOpenedProcessID()~=0,'Attach to FINAL FANTASY V.exe first')
+ local base=getAddressSafe('GameAssembly.dll')
+ assert(base,'FF5 GameAssembly.dll missing')
+ local pe=base+readInteger(base+60)
+ assert(readInteger(pe+8)==1738631357 and readInteger(pe+80)==40267776,'This CT requires FF5 PR Steam build 20265087')
+ assert(LaunchMonoDataCollector(),'Mono collector unavailable')
+ local manager=call(find('Last.Management','UserDataManager','Instance',''))
+ assert(manager and manager~=0,'Load your save and stop on the map first')
+ return manager
+end
+
+local methodCache={}
+local function method(o,n,sig)
+ local c=mono_object_getClass(o)
+ local key=tostring(c)..':'..n..':'..tostring(sig)
+ if methodCache[key] then return methodCache[key] end
+ while c and c~=0 do
+  for _,v in ipairs(mono_class_enumMethods(c)) do
+   if v.name==n and (not sig or mono_method_getSignature(v.method)==sig) then methodCache[key]=v.method;return v.method end
+  end
+  c=mono_class_getParent(c)
+ end
+ error('Missing method '..n)
+end
+local function g(o,n,args,sig) assert(o and o~=0,'Missing object for '..n);return call(method(o,n,sig),o,args) end
+local u=setup()
+assert(g(u,'GetMemberData',{0})~=0,'Load a save and stop on the map first')
+
+local function fld(c,name,expectedType)
+ for _,v in ipairs(mono_class_enumFields(c,true) or {}) do
+  if v.name==name then assert(not expectedType or v.typename==expectedType,'Unexpected field type: '..name);return v end
+ end
+ error('Field missing: '..name)
+end
+local function ptr(a)
+ local p=readPointer(a);assert(p and p&gt;0x10000,'Invalid pointer');return p
+end
+local function list(o,max)
+ local c=mono_object_getClass(o);assert(c and c~=0,'Invalid list')
+ local count=readInteger(o+fld(c,'_size','System.Int32').offset)
+ assert(count and count&gt;=0 and count&lt;=max,'Unexpected list size')
+ local a=ptr(o+fld(c,'_items').offset);local length=readInteger(a+0x18)
+ assert(length and length&gt;=count and length&lt;=512,'Invalid list capacity')
+ local r={};for i=0,count-1 do r[#r+1]=ptr(a+0x20+i*8) end;return r
+end
+
+local um=mono_findClass('Last.Management','UserDataManager')
+local function current()
+ local p=mono_class_getStaticFieldValue(um,fld(um,'instance').field)
+ assert(p and p&gt;0x10000,'Load your save first');return p
+end
+local function released()
+ local p=current();local jobs=list(ptr(p+fld(um,'&lt;ReleasedJobs&gt;k__BackingField').offset),32)
+ local jc=mono_findClass('Last.Data.Master','Job');assert(jc and jc~=0,'Job metadata missing')
+ local index=mono_class_getStaticFieldValue(jc,fld(jc,'_index_ID').field)
+ assert(index and index&gt;=0 and index&lt;20,'Invalid job ID index')
+ local r={}
+ for _,j in ipairs(jobs) do
+  assert(mono_object_getClass(j)==jc,'Unexpected job object')
+  local a=ptr(j+fld(jc,'valueIntList').offset)
+  local size=readInteger(a+0x18);assert(size and size&gt;index and size&lt;128,'Invalid job record')
+  local id=readInteger(a+0x20+index*4)
+  assert(id and id&gt;=1 and id&lt;=22 and not r[id],'Invalid released job');r[id]=true
+ end
+ return r
+end
+local function hashset(name)
+ local s=ptr(current()+fld(um,name).offset);local c=mono_object_getClass(s)
+ local count=readInteger(s+fld(c,'_count').offset);local last=readInteger(s+fld(c,'_lastIndex').offset)
+ assert(count and last and count&gt;=0 and count&lt;=last and last&lt;=2048,'Invalid magic collection')
+ local r={};local n=0
+ if last&gt;0 then
+  local a=ptr(s+fld(c,'_slots').offset);local length=readInteger(a+0x18)
+  assert(length and length&gt;=last and length&lt;=4096,'Invalid magic capacity')
+  for i=0,last-1 do
+   local slot=a+0x20+i*12;local h=readInteger(slot)
+   assert(h,'Unreadable magic slot')
+   if h&lt;0x80000000 then local id=readInteger(slot+8);assert(id and id&gt;0 and id&lt;10000 and not r[id],'Invalid magic ID');r[id]=true;n=n+1 end
+  end
+ end
+ assert(n==count,'Magic collection count mismatch');return r,n
+end
+local function preserve(before,after)
+ for id in pairs(before) do assert(after[id],'An existing magic/ability was lost: '..id) end
+end
+local function samejobs(before,after)
+ preserve(before,after);preserve(after,before)
+end
+
+local category="白魔法"
+local requiredJob=6
+local spells={{374,108},{375,109},{376,110},{377,111},{378,112},{379,113},{380,114},{381,115},{382,116},{383,117},{384,118},{385,119},{386,120},{387,121},{388,122},{389,123},{390,124},{391,125}}
+
+local jobs=released()
+assert(jobs[requiredJob],category..'：對應職業尚未解鎖，已停止；沒有新增魔法。')
+local before=hashset('&lt;OwnedMagicList&gt;k__BackingField')
+local learned=hashset('&lt;LearnedAbilityList&gt;k__BackingField')
+-- Validate every collection before invoking the normal acquisition route.
+local client=instance('Last.Management','OwnedItemClient')
+local add=find('Last.Management','OwnedItemClient','AddAbility','System.Int32')
+local changed=0
+for _,v in ipairs(spells) do
+ if not before[v[1]] then call(add,client,{v[1]});changed=changed+1 end
+end
+local after=hashset('&lt;OwnedMagicList&gt;k__BackingField')
+local newlearned=hashset('&lt;LearnedAbilityList&gt;k__BackingField')
+for _,v in ipairs(spells) do assert(after[v[1]] and newlearned[v[2]],category..'學習結果不完整；請讀取修改前存檔。') end
+preserve(before,after);preserve(learned,newlearned);samejobs(jobs,released())
+print('MAGIC VERIFIED: '..category..', '..#spells..' spells; '..changed..' newly acquired; jobs preserved')
+
+showMessage(category.."已核對完成。請重開魔法／能力選單，確認後另存新欄位。取消勾選不會忘記已學魔法；可用等級仍依職業能力。")
+{$asm}
+[DISABLE]
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>2</ID>
+      <Description>"黑魔法：全部 18 招（須已解鎖對應職業；地圖上執行一次）"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+local function find(ns,cls,name,signature)
+ local c=mono_findClass(ns,cls)
+ assert(c and c~=0,'Class missing: '..cls)
+ for _,m in ipairs(mono_class_enumMethods(c)) do
+  if m.name==name and (not signature or mono_method_getSignature(m.method)==signature) then return m.method end
+ end
+ error('Method missing: '..cls..'.'..name)
+end
+local function call(m,obj,args)
+ local r,e=mono_invoke_method(0,m,obj or 0,args or {})
+ assert(e==nil,tostring(e))
+ return r
+end
+local function instance(ns,cls)
+ local c=mono_findClass(ns,cls)
+ local obj=mono_object_new(c)
+ assert(obj and obj~=0,'Cannot create '..cls)
+ call(find(ns,cls,'.ctor',''),obj)
+ return obj
+end
+local function setup()
+ assert(getOpenedProcessID()~=0,'Attach to FINAL FANTASY V.exe first')
+ local base=getAddressSafe('GameAssembly.dll')
+ assert(base,'FF5 GameAssembly.dll missing')
+ local pe=base+readInteger(base+60)
+ assert(readInteger(pe+8)==1738631357 and readInteger(pe+80)==40267776,'This CT requires FF5 PR Steam build 20265087')
+ assert(LaunchMonoDataCollector(),'Mono collector unavailable')
+ local manager=call(find('Last.Management','UserDataManager','Instance',''))
+ assert(manager and manager~=0,'Load your save and stop on the map first')
+ return manager
+end
+
+local methodCache={}
+local function method(o,n,sig)
+ local c=mono_object_getClass(o)
+ local key=tostring(c)..':'..n..':'..tostring(sig)
+ if methodCache[key] then return methodCache[key] end
+ while c and c~=0 do
+  for _,v in ipairs(mono_class_enumMethods(c)) do
+   if v.name==n and (not sig or mono_method_getSignature(v.method)==sig) then methodCache[key]=v.method;return v.method end
+  end
+  c=mono_class_getParent(c)
+ end
+ error('Missing method '..n)
+end
+local function g(o,n,args,sig) assert(o and o~=0,'Missing object for '..n);return call(method(o,n,sig),o,args) end
+local u=setup()
+assert(g(u,'GetMemberData',{0})~=0,'Load a save and stop on the map first')
+
+local function fld(c,name,expectedType)
+ for _,v in ipairs(mono_class_enumFields(c,true) or {}) do
+  if v.name==name then assert(not expectedType or v.typename==expectedType,'Unexpected field type: '..name);return v end
+ end
+ error('Field missing: '..name)
+end
+local function ptr(a)
+ local p=readPointer(a);assert(p and p&gt;0x10000,'Invalid pointer');return p
+end
+local function list(o,max)
+ local c=mono_object_getClass(o);assert(c and c~=0,'Invalid list')
+ local count=readInteger(o+fld(c,'_size','System.Int32').offset)
+ assert(count and count&gt;=0 and count&lt;=max,'Unexpected list size')
+ local a=ptr(o+fld(c,'_items').offset);local length=readInteger(a+0x18)
+ assert(length and length&gt;=count and length&lt;=512,'Invalid list capacity')
+ local r={};for i=0,count-1 do r[#r+1]=ptr(a+0x20+i*8) end;return r
+end
+
+local um=mono_findClass('Last.Management','UserDataManager')
+local function current()
+ local p=mono_class_getStaticFieldValue(um,fld(um,'instance').field)
+ assert(p and p&gt;0x10000,'Load your save first');return p
+end
+local function released()
+ local p=current();local jobs=list(ptr(p+fld(um,'&lt;ReleasedJobs&gt;k__BackingField').offset),32)
+ local jc=mono_findClass('Last.Data.Master','Job');assert(jc and jc~=0,'Job metadata missing')
+ local index=mono_class_getStaticFieldValue(jc,fld(jc,'_index_ID').field)
+ assert(index and index&gt;=0 and index&lt;20,'Invalid job ID index')
+ local r={}
+ for _,j in ipairs(jobs) do
+  assert(mono_object_getClass(j)==jc,'Unexpected job object')
+  local a=ptr(j+fld(jc,'valueIntList').offset)
+  local size=readInteger(a+0x18);assert(size and size&gt;index and size&lt;128,'Invalid job record')
+  local id=readInteger(a+0x20+index*4)
+  assert(id and id&gt;=1 and id&lt;=22 and not r[id],'Invalid released job');r[id]=true
+ end
+ return r
+end
+local function hashset(name)
+ local s=ptr(current()+fld(um,name).offset);local c=mono_object_getClass(s)
+ local count=readInteger(s+fld(c,'_count').offset);local last=readInteger(s+fld(c,'_lastIndex').offset)
+ assert(count and last and count&gt;=0 and count&lt;=last and last&lt;=2048,'Invalid magic collection')
+ local r={};local n=0
+ if last&gt;0 then
+  local a=ptr(s+fld(c,'_slots').offset);local length=readInteger(a+0x18)
+  assert(length and length&gt;=last and length&lt;=4096,'Invalid magic capacity')
+  for i=0,last-1 do
+   local slot=a+0x20+i*12;local h=readInteger(slot)
+   assert(h,'Unreadable magic slot')
+   if h&lt;0x80000000 then local id=readInteger(slot+8);assert(id and id&gt;0 and id&lt;10000 and not r[id],'Invalid magic ID');r[id]=true;n=n+1 end
+  end
+ end
+ assert(n==count,'Magic collection count mismatch');return r,n
+end
+local function preserve(before,after)
+ for id in pairs(before) do assert(after[id],'An existing magic/ability was lost: '..id) end
+end
+local function samejobs(before,after)
+ preserve(before,after);preserve(after,before)
+end
+
+local category="黑魔法"
+local requiredJob=5
+local spells={{392,126},{393,127},{394,128},{395,129},{396,130},{397,131},{398,132},{399,133},{400,134},{401,135},{402,136},{403,137},{404,138},{405,139},{406,140},{407,141},{408,142},{409,143}}
+
+local jobs=released()
+assert(jobs[requiredJob],category..'：對應職業尚未解鎖，已停止；沒有新增魔法。')
+local before=hashset('&lt;OwnedMagicList&gt;k__BackingField')
+local learned=hashset('&lt;LearnedAbilityList&gt;k__BackingField')
+-- Validate every collection before invoking the normal acquisition route.
+local client=instance('Last.Management','OwnedItemClient')
+local add=find('Last.Management','OwnedItemClient','AddAbility','System.Int32')
+local changed=0
+for _,v in ipairs(spells) do
+ if not before[v[1]] then call(add,client,{v[1]});changed=changed+1 end
+end
+local after=hashset('&lt;OwnedMagicList&gt;k__BackingField')
+local newlearned=hashset('&lt;LearnedAbilityList&gt;k__BackingField')
+for _,v in ipairs(spells) do assert(after[v[1]] and newlearned[v[2]],category..'學習結果不完整；請讀取修改前存檔。') end
+preserve(before,after);preserve(learned,newlearned);samejobs(jobs,released())
+print('MAGIC VERIFIED: '..category..', '..#spells..' spells; '..changed..' newly acquired; jobs preserved')
+
+showMessage(category.."已核對完成。請重開魔法／能力選單，確認後另存新欄位。取消勾選不會忘記已學魔法；可用等級仍依職業能力。")
+{$asm}
+[DISABLE]
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>3</ID>
+      <Description>"時空魔法：全部 18 招（須已解鎖對應職業；地圖上執行一次）"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+local function find(ns,cls,name,signature)
+ local c=mono_findClass(ns,cls)
+ assert(c and c~=0,'Class missing: '..cls)
+ for _,m in ipairs(mono_class_enumMethods(c)) do
+  if m.name==name and (not signature or mono_method_getSignature(m.method)==signature) then return m.method end
+ end
+ error('Method missing: '..cls..'.'..name)
+end
+local function call(m,obj,args)
+ local r,e=mono_invoke_method(0,m,obj or 0,args or {})
+ assert(e==nil,tostring(e))
+ return r
+end
+local function instance(ns,cls)
+ local c=mono_findClass(ns,cls)
+ local obj=mono_object_new(c)
+ assert(obj and obj~=0,'Cannot create '..cls)
+ call(find(ns,cls,'.ctor',''),obj)
+ return obj
+end
+local function setup()
+ assert(getOpenedProcessID()~=0,'Attach to FINAL FANTASY V.exe first')
+ local base=getAddressSafe('GameAssembly.dll')
+ assert(base,'FF5 GameAssembly.dll missing')
+ local pe=base+readInteger(base+60)
+ assert(readInteger(pe+8)==1738631357 and readInteger(pe+80)==40267776,'This CT requires FF5 PR Steam build 20265087')
+ assert(LaunchMonoDataCollector(),'Mono collector unavailable')
+ local manager=call(find('Last.Management','UserDataManager','Instance',''))
+ assert(manager and manager~=0,'Load your save and stop on the map first')
+ return manager
+end
+
+local methodCache={}
+local function method(o,n,sig)
+ local c=mono_object_getClass(o)
+ local key=tostring(c)..':'..n..':'..tostring(sig)
+ if methodCache[key] then return methodCache[key] end
+ while c and c~=0 do
+  for _,v in ipairs(mono_class_enumMethods(c)) do
+   if v.name==n and (not sig or mono_method_getSignature(v.method)==sig) then methodCache[key]=v.method;return v.method end
+  end
+  c=mono_class_getParent(c)
+ end
+ error('Missing method '..n)
+end
+local function g(o,n,args,sig) assert(o and o~=0,'Missing object for '..n);return call(method(o,n,sig),o,args) end
+local u=setup()
+assert(g(u,'GetMemberData',{0})~=0,'Load a save and stop on the map first')
+
+local function fld(c,name,expectedType)
+ for _,v in ipairs(mono_class_enumFields(c,true) or {}) do
+  if v.name==name then assert(not expectedType or v.typename==expectedType,'Unexpected field type: '..name);return v end
+ end
+ error('Field missing: '..name)
+end
+local function ptr(a)
+ local p=readPointer(a);assert(p and p&gt;0x10000,'Invalid pointer');return p
+end
+local function list(o,max)
+ local c=mono_object_getClass(o);assert(c and c~=0,'Invalid list')
+ local count=readInteger(o+fld(c,'_size','System.Int32').offset)
+ assert(count and count&gt;=0 and count&lt;=max,'Unexpected list size')
+ local a=ptr(o+fld(c,'_items').offset);local length=readInteger(a+0x18)
+ assert(length and length&gt;=count and length&lt;=512,'Invalid list capacity')
+ local r={};for i=0,count-1 do r[#r+1]=ptr(a+0x20+i*8) end;return r
+end
+
+local um=mono_findClass('Last.Management','UserDataManager')
+local function current()
+ local p=mono_class_getStaticFieldValue(um,fld(um,'instance').field)
+ assert(p and p&gt;0x10000,'Load your save first');return p
+end
+local function released()
+ local p=current();local jobs=list(ptr(p+fld(um,'&lt;ReleasedJobs&gt;k__BackingField').offset),32)
+ local jc=mono_findClass('Last.Data.Master','Job');assert(jc and jc~=0,'Job metadata missing')
+ local index=mono_class_getStaticFieldValue(jc,fld(jc,'_index_ID').field)
+ assert(index and index&gt;=0 and index&lt;20,'Invalid job ID index')
+ local r={}
+ for _,j in ipairs(jobs) do
+  assert(mono_object_getClass(j)==jc,'Unexpected job object')
+  local a=ptr(j+fld(jc,'valueIntList').offset)
+  local size=readInteger(a+0x18);assert(size and size&gt;index and size&lt;128,'Invalid job record')
+  local id=readInteger(a+0x20+index*4)
+  assert(id and id&gt;=1 and id&lt;=22 and not r[id],'Invalid released job');r[id]=true
+ end
+ return r
+end
+local function hashset(name)
+ local s=ptr(current()+fld(um,name).offset);local c=mono_object_getClass(s)
+ local count=readInteger(s+fld(c,'_count').offset);local last=readInteger(s+fld(c,'_lastIndex').offset)
+ assert(count and last and count&gt;=0 and count&lt;=last and last&lt;=2048,'Invalid magic collection')
+ local r={};local n=0
+ if last&gt;0 then
+  local a=ptr(s+fld(c,'_slots').offset);local length=readInteger(a+0x18)
+  assert(length and length&gt;=last and length&lt;=4096,'Invalid magic capacity')
+  for i=0,last-1 do
+   local slot=a+0x20+i*12;local h=readInteger(slot)
+   assert(h,'Unreadable magic slot')
+   if h&lt;0x80000000 then local id=readInteger(slot+8);assert(id and id&gt;0 and id&lt;10000 and not r[id],'Invalid magic ID');r[id]=true;n=n+1 end
+  end
+ end
+ assert(n==count,'Magic collection count mismatch');return r,n
+end
+local function preserve(before,after)
+ for id in pairs(before) do assert(after[id],'An existing magic/ability was lost: '..id) end
+end
+local function samejobs(before,after)
+ preserve(before,after);preserve(after,before)
+end
+
+local category="時空魔法"
+local requiredJob=16
+local spells={{410,144},{411,145},{412,146},{413,147},{414,148},{415,149},{416,150},{417,151},{418,152},{419,153},{420,154},{421,155},{422,156},{423,157},{424,158},{425,159},{426,160},{427,161}}
+
+local jobs=released()
+assert(jobs[requiredJob],category..'：對應職業尚未解鎖，已停止；沒有新增魔法。')
+local before=hashset('&lt;OwnedMagicList&gt;k__BackingField')
+local learned=hashset('&lt;LearnedAbilityList&gt;k__BackingField')
+-- Validate every collection before invoking the normal acquisition route.
+local client=instance('Last.Management','OwnedItemClient')
+local add=find('Last.Management','OwnedItemClient','AddAbility','System.Int32')
+local changed=0
+for _,v in ipairs(spells) do
+ if not before[v[1]] then call(add,client,{v[1]});changed=changed+1 end
+end
+local after=hashset('&lt;OwnedMagicList&gt;k__BackingField')
+local newlearned=hashset('&lt;LearnedAbilityList&gt;k__BackingField')
+for _,v in ipairs(spells) do assert(after[v[1]] and newlearned[v[2]],category..'學習結果不完整；請讀取修改前存檔。') end
+preserve(before,after);preserve(learned,newlearned);samejobs(jobs,released())
+print('MAGIC VERIFIED: '..category..', '..#spells..' spells; '..changed..' newly acquired; jobs preserved')
+
+showMessage(category.."已核對完成。請重開魔法／能力選單，確認後另存新欄位。取消勾選不會忘記已學魔法；可用等級仍依職業能力。")
+{$asm}
+[DISABLE]
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>4</ID>
+      <Description>"召喚魔法：全部 15 招（須已解鎖對應職業；地圖上執行一次）"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+local function find(ns,cls,name,signature)
+ local c=mono_findClass(ns,cls)
+ assert(c and c~=0,'Class missing: '..cls)
+ for _,m in ipairs(mono_class_enumMethods(c)) do
+  if m.name==name and (not signature or mono_method_getSignature(m.method)==signature) then return m.method end
+ end
+ error('Method missing: '..cls..'.'..name)
+end
+local function call(m,obj,args)
+ local r,e=mono_invoke_method(0,m,obj or 0,args or {})
+ assert(e==nil,tostring(e))
+ return r
+end
+local function instance(ns,cls)
+ local c=mono_findClass(ns,cls)
+ local obj=mono_object_new(c)
+ assert(obj and obj~=0,'Cannot create '..cls)
+ call(find(ns,cls,'.ctor',''),obj)
+ return obj
+end
+local function setup()
+ assert(getOpenedProcessID()~=0,'Attach to FINAL FANTASY V.exe first')
+ local base=getAddressSafe('GameAssembly.dll')
+ assert(base,'FF5 GameAssembly.dll missing')
+ local pe=base+readInteger(base+60)
+ assert(readInteger(pe+8)==1738631357 and readInteger(pe+80)==40267776,'This CT requires FF5 PR Steam build 20265087')
+ assert(LaunchMonoDataCollector(),'Mono collector unavailable')
+ local manager=call(find('Last.Management','UserDataManager','Instance',''))
+ assert(manager and manager~=0,'Load your save and stop on the map first')
+ return manager
+end
+
+local methodCache={}
+local function method(o,n,sig)
+ local c=mono_object_getClass(o)
+ local key=tostring(c)..':'..n..':'..tostring(sig)
+ if methodCache[key] then return methodCache[key] end
+ while c and c~=0 do
+  for _,v in ipairs(mono_class_enumMethods(c)) do
+   if v.name==n and (not sig or mono_method_getSignature(v.method)==sig) then methodCache[key]=v.method;return v.method end
+  end
+  c=mono_class_getParent(c)
+ end
+ error('Missing method '..n)
+end
+local function g(o,n,args,sig) assert(o and o~=0,'Missing object for '..n);return call(method(o,n,sig),o,args) end
+local u=setup()
+assert(g(u,'GetMemberData',{0})~=0,'Load a save and stop on the map first')
+
+local function fld(c,name,expectedType)
+ for _,v in ipairs(mono_class_enumFields(c,true) or {}) do
+  if v.name==name then assert(not expectedType or v.typename==expectedType,'Unexpected field type: '..name);return v end
+ end
+ error('Field missing: '..name)
+end
+local function ptr(a)
+ local p=readPointer(a);assert(p and p&gt;0x10000,'Invalid pointer');return p
+end
+local function list(o,max)
+ local c=mono_object_getClass(o);assert(c and c~=0,'Invalid list')
+ local count=readInteger(o+fld(c,'_size','System.Int32').offset)
+ assert(count and count&gt;=0 and count&lt;=max,'Unexpected list size')
+ local a=ptr(o+fld(c,'_items').offset);local length=readInteger(a+0x18)
+ assert(length and length&gt;=count and length&lt;=512,'Invalid list capacity')
+ local r={};for i=0,count-1 do r[#r+1]=ptr(a+0x20+i*8) end;return r
+end
+
+local um=mono_findClass('Last.Management','UserDataManager')
+local function current()
+ local p=mono_class_getStaticFieldValue(um,fld(um,'instance').field)
+ assert(p and p&gt;0x10000,'Load your save first');return p
+end
+local function released()
+ local p=current();local jobs=list(ptr(p+fld(um,'&lt;ReleasedJobs&gt;k__BackingField').offset),32)
+ local jc=mono_findClass('Last.Data.Master','Job');assert(jc and jc~=0,'Job metadata missing')
+ local index=mono_class_getStaticFieldValue(jc,fld(jc,'_index_ID').field)
+ assert(index and index&gt;=0 and index&lt;20,'Invalid job ID index')
+ local r={}
+ for _,j in ipairs(jobs) do
+  assert(mono_object_getClass(j)==jc,'Unexpected job object')
+  local a=ptr(j+fld(jc,'valueIntList').offset)
+  local size=readInteger(a+0x18);assert(size and size&gt;index and size&lt;128,'Invalid job record')
+  local id=readInteger(a+0x20+index*4)
+  assert(id and id&gt;=1 and id&lt;=22 and not r[id],'Invalid released job');r[id]=true
+ end
+ return r
+end
+local function hashset(name)
+ local s=ptr(current()+fld(um,name).offset);local c=mono_object_getClass(s)
+ local count=readInteger(s+fld(c,'_count').offset);local last=readInteger(s+fld(c,'_lastIndex').offset)
+ assert(count and last and count&gt;=0 and count&lt;=last and last&lt;=2048,'Invalid magic collection')
+ local r={};local n=0
+ if last&gt;0 then
+  local a=ptr(s+fld(c,'_slots').offset);local length=readInteger(a+0x18)
+  assert(length and length&gt;=last and length&lt;=4096,'Invalid magic capacity')
+  for i=0,last-1 do
+   local slot=a+0x20+i*12;local h=readInteger(slot)
+   assert(h,'Unreadable magic slot')
+   if h&lt;0x80000000 then local id=readInteger(slot+8);assert(id and id&gt;0 and id&lt;10000 and not r[id],'Invalid magic ID');r[id]=true;n=n+1 end
+  end
+ end
+ assert(n==count,'Magic collection count mismatch');return r,n
+end
+local function preserve(before,after)
+ for id in pairs(before) do assert(after[id],'An existing magic/ability was lost: '..id) end
+end
+local function samejobs(before,after)
+ preserve(before,after);preserve(after,before)
+end
+
+local category="召喚魔法"
+local requiredJob=13
+local spells={{428,162},{429,163},{430,164},{431,165},{432,166},{433,167},{434,168},{435,169},{436,170},{437,171},{438,172},{439,173},{440,174},{441,175},{442,176}}
+
+local jobs=released()
+assert(jobs[requiredJob],category..'：對應職業尚未解鎖，已停止；沒有新增魔法。')
+local before=hashset('&lt;OwnedMagicList&gt;k__BackingField')
+local learned=hashset('&lt;LearnedAbilityList&gt;k__BackingField')
+-- Validate every collection before invoking the normal acquisition route.
+local client=instance('Last.Management','OwnedItemClient')
+local add=find('Last.Management','OwnedItemClient','AddAbility','System.Int32')
+local changed=0
+for _,v in ipairs(spells) do
+ if not before[v[1]] then call(add,client,{v[1]});changed=changed+1 end
+end
+local after=hashset('&lt;OwnedMagicList&gt;k__BackingField')
+local newlearned=hashset('&lt;LearnedAbilityList&gt;k__BackingField')
+for _,v in ipairs(spells) do assert(after[v[1]] and newlearned[v[2]],category..'學習結果不完整；請讀取修改前存檔。') end
+preserve(before,after);preserve(learned,newlearned);samejobs(jobs,released())
+print('MAGIC VERIFIED: '..category..', '..#spells..' spells; '..changed..' newly acquired; jobs preserved')
+
+showMessage(category.."已核對完成。請重開魔法／能力選單，確認後另存新欄位。取消勾選不會忘記已學魔法；可用等級仍依職業能力。")
+{$asm}
+[DISABLE]
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>5</ID>
+      <Description>"青魔法：全部 30 招（須已解鎖對應職業；地圖上執行一次）"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+local function find(ns,cls,name,signature)
+ local c=mono_findClass(ns,cls)
+ assert(c and c~=0,'Class missing: '..cls)
+ for _,m in ipairs(mono_class_enumMethods(c)) do
+  if m.name==name and (not signature or mono_method_getSignature(m.method)==signature) then return m.method end
+ end
+ error('Method missing: '..cls..'.'..name)
+end
+local function call(m,obj,args)
+ local r,e=mono_invoke_method(0,m,obj or 0,args or {})
+ assert(e==nil,tostring(e))
+ return r
+end
+local function instance(ns,cls)
+ local c=mono_findClass(ns,cls)
+ local obj=mono_object_new(c)
+ assert(obj and obj~=0,'Cannot create '..cls)
+ call(find(ns,cls,'.ctor',''),obj)
+ return obj
+end
+local function setup()
+ assert(getOpenedProcessID()~=0,'Attach to FINAL FANTASY V.exe first')
+ local base=getAddressSafe('GameAssembly.dll')
+ assert(base,'FF5 GameAssembly.dll missing')
+ local pe=base+readInteger(base+60)
+ assert(readInteger(pe+8)==1738631357 and readInteger(pe+80)==40267776,'This CT requires FF5 PR Steam build 20265087')
+ assert(LaunchMonoDataCollector(),'Mono collector unavailable')
+ local manager=call(find('Last.Management','UserDataManager','Instance',''))
+ assert(manager and manager~=0,'Load your save and stop on the map first')
+ return manager
+end
+
+local methodCache={}
+local function method(o,n,sig)
+ local c=mono_object_getClass(o)
+ local key=tostring(c)..':'..n..':'..tostring(sig)
+ if methodCache[key] then return methodCache[key] end
+ while c and c~=0 do
+  for _,v in ipairs(mono_class_enumMethods(c)) do
+   if v.name==n and (not sig or mono_method_getSignature(v.method)==sig) then methodCache[key]=v.method;return v.method end
+  end
+  c=mono_class_getParent(c)
+ end
+ error('Missing method '..n)
+end
+local function g(o,n,args,sig) assert(o and o~=0,'Missing object for '..n);return call(method(o,n,sig),o,args) end
+local u=setup()
+assert(g(u,'GetMemberData',{0})~=0,'Load a save and stop on the map first')
+
+local function fld(c,name,expectedType)
+ for _,v in ipairs(mono_class_enumFields(c,true) or {}) do
+  if v.name==name then assert(not expectedType or v.typename==expectedType,'Unexpected field type: '..name);return v end
+ end
+ error('Field missing: '..name)
+end
+local function ptr(a)
+ local p=readPointer(a);assert(p and p&gt;0x10000,'Invalid pointer');return p
+end
+local function list(o,max)
+ local c=mono_object_getClass(o);assert(c and c~=0,'Invalid list')
+ local count=readInteger(o+fld(c,'_size','System.Int32').offset)
+ assert(count and count&gt;=0 and count&lt;=max,'Unexpected list size')
+ local a=ptr(o+fld(c,'_items').offset);local length=readInteger(a+0x18)
+ assert(length and length&gt;=count and length&lt;=512,'Invalid list capacity')
+ local r={};for i=0,count-1 do r[#r+1]=ptr(a+0x20+i*8) end;return r
+end
+
+local um=mono_findClass('Last.Management','UserDataManager')
+local function current()
+ local p=mono_class_getStaticFieldValue(um,fld(um,'instance').field)
+ assert(p and p&gt;0x10000,'Load your save first');return p
+end
+local function released()
+ local p=current();local jobs=list(ptr(p+fld(um,'&lt;ReleasedJobs&gt;k__BackingField').offset),32)
+ local jc=mono_findClass('Last.Data.Master','Job');assert(jc and jc~=0,'Job metadata missing')
+ local index=mono_class_getStaticFieldValue(jc,fld(jc,'_index_ID').field)
+ assert(index and index&gt;=0 and index&lt;20,'Invalid job ID index')
+ local r={}
+ for _,j in ipairs(jobs) do
+  assert(mono_object_getClass(j)==jc,'Unexpected job object')
+  local a=ptr(j+fld(jc,'valueIntList').offset)
+  local size=readInteger(a+0x18);assert(size and size&gt;index and size&lt;128,'Invalid job record')
+  local id=readInteger(a+0x20+index*4)
+  assert(id and id&gt;=1 and id&lt;=22 and not r[id],'Invalid released job');r[id]=true
+ end
+ return r
+end
+local function hashset(name)
+ local s=ptr(current()+fld(um,name).offset);local c=mono_object_getClass(s)
+ local count=readInteger(s+fld(c,'_count').offset);local last=readInteger(s+fld(c,'_lastIndex').offset)
+ assert(count and last and count&gt;=0 and count&lt;=last and last&lt;=2048,'Invalid magic collection')
+ local r={};local n=0
+ if last&gt;0 then
+  local a=ptr(s+fld(c,'_slots').offset);local length=readInteger(a+0x18)
+  assert(length and length&gt;=last and length&lt;=4096,'Invalid magic capacity')
+  for i=0,last-1 do
+   local slot=a+0x20+i*12;local h=readInteger(slot)
+   assert(h,'Unreadable magic slot')
+   if h&lt;0x80000000 then local id=readInteger(slot+8);assert(id and id&gt;0 and id&lt;10000 and not r[id],'Invalid magic ID');r[id]=true;n=n+1 end
+  end
+ end
+ assert(n==count,'Magic collection count mismatch');return r,n
+end
+local function preserve(before,after)
+ for id in pairs(before) do assert(after[id],'An existing magic/ability was lost: '..id) end
+end
+local function samejobs(before,after)
+ preserve(before,after);preserve(after,before)
+end
+
+local category="青魔法"
+local requiredJob=19
+local spells={{649,383},{650,384},{651,385},{652,386},{653,387},{654,388},{655,389},{656,390},{657,391},{658,392},{659,393},{660,394},{661,395},{662,396},{663,397},{664,398},{665,399},{666,400},{667,401},{668,402},{669,403},{670,404},{671,405},{672,406},{673,407},{674,408},{675,409},{676,410},{677,411},{678,412}}
+
+local jobs=released()
+assert(jobs[requiredJob],category..'：對應職業尚未解鎖，已停止；沒有新增魔法。')
+local before=hashset('&lt;OwnedMagicList&gt;k__BackingField')
+local learned=hashset('&lt;LearnedAbilityList&gt;k__BackingField')
+-- Validate every collection before invoking the normal acquisition route.
+local client=instance('Last.Management','OwnedItemClient')
+local add=find('Last.Management','OwnedItemClient','AddAbility','System.Int32')
+local changed=0
+for _,v in ipairs(spells) do
+ if not before[v[1]] then call(add,client,{v[1]});changed=changed+1 end
+end
+local after=hashset('&lt;OwnedMagicList&gt;k__BackingField')
+local newlearned=hashset('&lt;LearnedAbilityList&gt;k__BackingField')
+for _,v in ipairs(spells) do assert(after[v[1]] and newlearned[v[2]],category..'學習結果不完整；請讀取修改前存檔。') end
+preserve(before,after);preserve(learned,newlearned);samejobs(jobs,released())
+print('MAGIC VERIFIED: '..category..', '..#spells..' spells; '..changed..' newly acquired; jobs preserved')
+
+showMessage(category.."已核對完成。請重開魔法／能力選單，確認後另存新欄位。取消勾選不會忘記已學魔法；可用等級仍依職業能力。")
+{$asm}
+[DISABLE]
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>6</ID>
+      <Description>"魔法劍：全部 18 招（須已解鎖對應職業；地圖上執行一次）"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+local function find(ns,cls,name,signature)
+ local c=mono_findClass(ns,cls)
+ assert(c and c~=0,'Class missing: '..cls)
+ for _,m in ipairs(mono_class_enumMethods(c)) do
+  if m.name==name and (not signature or mono_method_getSignature(m.method)==signature) then return m.method end
+ end
+ error('Method missing: '..cls..'.'..name)
+end
+local function call(m,obj,args)
+ local r,e=mono_invoke_method(0,m,obj or 0,args or {})
+ assert(e==nil,tostring(e))
+ return r
+end
+local function instance(ns,cls)
+ local c=mono_findClass(ns,cls)
+ local obj=mono_object_new(c)
+ assert(obj and obj~=0,'Cannot create '..cls)
+ call(find(ns,cls,'.ctor',''),obj)
+ return obj
+end
+local function setup()
+ assert(getOpenedProcessID()~=0,'Attach to FINAL FANTASY V.exe first')
+ local base=getAddressSafe('GameAssembly.dll')
+ assert(base,'FF5 GameAssembly.dll missing')
+ local pe=base+readInteger(base+60)
+ assert(readInteger(pe+8)==1738631357 and readInteger(pe+80)==40267776,'This CT requires FF5 PR Steam build 20265087')
+ assert(LaunchMonoDataCollector(),'Mono collector unavailable')
+ local manager=call(find('Last.Management','UserDataManager','Instance',''))
+ assert(manager and manager~=0,'Load your save and stop on the map first')
+ return manager
+end
+
+local methodCache={}
+local function method(o,n,sig)
+ local c=mono_object_getClass(o)
+ local key=tostring(c)..':'..n..':'..tostring(sig)
+ if methodCache[key] then return methodCache[key] end
+ while c and c~=0 do
+  for _,v in ipairs(mono_class_enumMethods(c)) do
+   if v.name==n and (not sig or mono_method_getSignature(v.method)==sig) then methodCache[key]=v.method;return v.method end
+  end
+  c=mono_class_getParent(c)
+ end
+ error('Missing method '..n)
+end
+local function g(o,n,args,sig) assert(o and o~=0,'Missing object for '..n);return call(method(o,n,sig),o,args) end
+local u=setup()
+assert(g(u,'GetMemberData',{0})~=0,'Load a save and stop on the map first')
+
+local function fld(c,name,expectedType)
+ for _,v in ipairs(mono_class_enumFields(c,true) or {}) do
+  if v.name==name then assert(not expectedType or v.typename==expectedType,'Unexpected field type: '..name);return v end
+ end
+ error('Field missing: '..name)
+end
+local function ptr(a)
+ local p=readPointer(a);assert(p and p&gt;0x10000,'Invalid pointer');return p
+end
+local function list(o,max)
+ local c=mono_object_getClass(o);assert(c and c~=0,'Invalid list')
+ local count=readInteger(o+fld(c,'_size','System.Int32').offset)
+ assert(count and count&gt;=0 and count&lt;=max,'Unexpected list size')
+ local a=ptr(o+fld(c,'_items').offset);local length=readInteger(a+0x18)
+ assert(length and length&gt;=count and length&lt;=512,'Invalid list capacity')
+ local r={};for i=0,count-1 do r[#r+1]=ptr(a+0x20+i*8) end;return r
+end
+
+local um=mono_findClass('Last.Management','UserDataManager')
+local function current()
+ local p=mono_class_getStaticFieldValue(um,fld(um,'instance').field)
+ assert(p and p&gt;0x10000,'Load your save first');return p
+end
+local function released()
+ local p=current();local jobs=list(ptr(p+fld(um,'&lt;ReleasedJobs&gt;k__BackingField').offset),32)
+ local jc=mono_findClass('Last.Data.Master','Job');assert(jc and jc~=0,'Job metadata missing')
+ local index=mono_class_getStaticFieldValue(jc,fld(jc,'_index_ID').field)
+ assert(index and index&gt;=0 and index&lt;20,'Invalid job ID index')
+ local r={}
+ for _,j in ipairs(jobs) do
+  assert(mono_object_getClass(j)==jc,'Unexpected job object')
+  local a=ptr(j+fld(jc,'valueIntList').offset)
+  local size=readInteger(a+0x18);assert(size and size&gt;index and size&lt;128,'Invalid job record')
+  local id=readInteger(a+0x20+index*4)
+  assert(id and id&gt;=1 and id&lt;=22 and not r[id],'Invalid released job');r[id]=true
+ end
+ return r
+end
+local function hashset(name)
+ local s=ptr(current()+fld(um,name).offset);local c=mono_object_getClass(s)
+ local count=readInteger(s+fld(c,'_count').offset);local last=readInteger(s+fld(c,'_lastIndex').offset)
+ assert(count and last and count&gt;=0 and count&lt;=last and last&lt;=2048,'Invalid magic collection')
+ local r={};local n=0
+ if last&gt;0 then
+  local a=ptr(s+fld(c,'_slots').offset);local length=readInteger(a+0x18)
+  assert(length and length&gt;=last and length&lt;=4096,'Invalid magic capacity')
+  for i=0,last-1 do
+   local slot=a+0x20+i*12;local h=readInteger(slot)
+   assert(h,'Unreadable magic slot')
+   if h&lt;0x80000000 then local id=readInteger(slot+8);assert(id and id&gt;0 and id&lt;10000 and not r[id],'Invalid magic ID');r[id]=true;n=n+1 end
+  end
+ end
+ assert(n==count,'Magic collection count mismatch');return r,n
+end
+local function preserve(before,after)
+ for id in pairs(before) do assert(after[id],'An existing magic/ability was lost: '..id) end
+end
+local function samejobs(before,after)
+ preserve(before,after);preserve(after,before)
+end
+
+local category="魔法劍"
+local requiredJob=10
+local spells={{356,90},{357,91},{358,92},{359,93},{360,94},{361,95},{362,96},{363,97},{364,98},{365,99},{366,100},{367,101},{368,102},{369,103},{370,104},{371,105},{372,106},{373,107}}
+
+local jobs=released()
+assert(jobs[requiredJob],category..'：對應職業尚未解鎖，已停止；沒有新增魔法。')
+local before=hashset('&lt;OwnedMagicList&gt;k__BackingField')
+local learned=hashset('&lt;LearnedAbilityList&gt;k__BackingField')
+-- Validate every collection before invoking the normal acquisition route.
+local client=instance('Last.Management','OwnedItemClient')
+local add=find('Last.Management','OwnedItemClient','AddAbility','System.Int32')
+local changed=0
+for _,v in ipairs(spells) do
+ if not before[v[1]] then call(add,client,{v[1]});changed=changed+1 end
+end
+local after=hashset('&lt;OwnedMagicList&gt;k__BackingField')
+local newlearned=hashset('&lt;LearnedAbilityList&gt;k__BackingField')
+for _,v in ipairs(spells) do assert(after[v[1]] and newlearned[v[2]],category..'學習結果不完整；請讀取修改前存檔。') end
+preserve(before,after);preserve(learned,newlearned);samejobs(jobs,released())
+print('MAGIC VERIFIED: '..category..', '..#spells..' spells; '..changed..' newly acquired; jobs preserved')
+
+showMessage(category.."已核對完成。請重開魔法／能力選單，確認後另存新欄位。取消勾選不會忘記已學魔法；可用等級仍依職業能力。")
+{$asm}
+[DISABLE]
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>7</ID>
+      <Description>"歌曲：全部 8 招（須已解鎖對應職業；地圖上執行一次）"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+local function find(ns,cls,name,signature)
+ local c=mono_findClass(ns,cls)
+ assert(c and c~=0,'Class missing: '..cls)
+ for _,m in ipairs(mono_class_enumMethods(c)) do
+  if m.name==name and (not signature or mono_method_getSignature(m.method)==signature) then return m.method end
+ end
+ error('Method missing: '..cls..'.'..name)
+end
+local function call(m,obj,args)
+ local r,e=mono_invoke_method(0,m,obj or 0,args or {})
+ assert(e==nil,tostring(e))
+ return r
+end
+local function instance(ns,cls)
+ local c=mono_findClass(ns,cls)
+ local obj=mono_object_new(c)
+ assert(obj and obj~=0,'Cannot create '..cls)
+ call(find(ns,cls,'.ctor',''),obj)
+ return obj
+end
+local function setup()
+ assert(getOpenedProcessID()~=0,'Attach to FINAL FANTASY V.exe first')
+ local base=getAddressSafe('GameAssembly.dll')
+ assert(base,'FF5 GameAssembly.dll missing')
+ local pe=base+readInteger(base+60)
+ assert(readInteger(pe+8)==1738631357 and readInteger(pe+80)==40267776,'This CT requires FF5 PR Steam build 20265087')
+ assert(LaunchMonoDataCollector(),'Mono collector unavailable')
+ local manager=call(find('Last.Management','UserDataManager','Instance',''))
+ assert(manager and manager~=0,'Load your save and stop on the map first')
+ return manager
+end
+
+local methodCache={}
+local function method(o,n,sig)
+ local c=mono_object_getClass(o)
+ local key=tostring(c)..':'..n..':'..tostring(sig)
+ if methodCache[key] then return methodCache[key] end
+ while c and c~=0 do
+  for _,v in ipairs(mono_class_enumMethods(c)) do
+   if v.name==n and (not sig or mono_method_getSignature(v.method)==sig) then methodCache[key]=v.method;return v.method end
+  end
+  c=mono_class_getParent(c)
+ end
+ error('Missing method '..n)
+end
+local function g(o,n,args,sig) assert(o and o~=0,'Missing object for '..n);return call(method(o,n,sig),o,args) end
+local u=setup()
+assert(g(u,'GetMemberData',{0})~=0,'Load a save and stop on the map first')
+
+local function fld(c,name,expectedType)
+ for _,v in ipairs(mono_class_enumFields(c,true) or {}) do
+  if v.name==name then assert(not expectedType or v.typename==expectedType,'Unexpected field type: '..name);return v end
+ end
+ error('Field missing: '..name)
+end
+local function ptr(a)
+ local p=readPointer(a);assert(p and p&gt;0x10000,'Invalid pointer');return p
+end
+local function list(o,max)
+ local c=mono_object_getClass(o);assert(c and c~=0,'Invalid list')
+ local count=readInteger(o+fld(c,'_size','System.Int32').offset)
+ assert(count and count&gt;=0 and count&lt;=max,'Unexpected list size')
+ local a=ptr(o+fld(c,'_items').offset);local length=readInteger(a+0x18)
+ assert(length and length&gt;=count and length&lt;=512,'Invalid list capacity')
+ local r={};for i=0,count-1 do r[#r+1]=ptr(a+0x20+i*8) end;return r
+end
+
+local um=mono_findClass('Last.Management','UserDataManager')
+local function current()
+ local p=mono_class_getStaticFieldValue(um,fld(um,'instance').field)
+ assert(p and p&gt;0x10000,'Load your save first');return p
+end
+local function released()
+ local p=current();local jobs=list(ptr(p+fld(um,'&lt;ReleasedJobs&gt;k__BackingField').offset),32)
+ local jc=mono_findClass('Last.Data.Master','Job');assert(jc and jc~=0,'Job metadata missing')
+ local index=mono_class_getStaticFieldValue(jc,fld(jc,'_index_ID').field)
+ assert(index and index&gt;=0 and index&lt;20,'Invalid job ID index')
+ local r={}
+ for _,j in ipairs(jobs) do
+  assert(mono_object_getClass(j)==jc,'Unexpected job object')
+  local a=ptr(j+fld(jc,'valueIntList').offset)
+  local size=readInteger(a+0x18);assert(size and size&gt;index and size&lt;128,'Invalid job record')
+  local id=readInteger(a+0x20+index*4)
+  assert(id and id&gt;=1 and id&lt;=22 and not r[id],'Invalid released job');r[id]=true
+ end
+ return r
+end
+local function hashset(name)
+ local s=ptr(current()+fld(um,name).offset);local c=mono_object_getClass(s)
+ local count=readInteger(s+fld(c,'_count').offset);local last=readInteger(s+fld(c,'_lastIndex').offset)
+ assert(count and last and count&gt;=0 and count&lt;=last and last&lt;=2048,'Invalid magic collection')
+ local r={};local n=0
+ if last&gt;0 then
+  local a=ptr(s+fld(c,'_slots').offset);local length=readInteger(a+0x18)
+  assert(length and length&gt;=last and length&lt;=4096,'Invalid magic capacity')
+  for i=0,last-1 do
+   local slot=a+0x20+i*12;local h=readInteger(slot)
+   assert(h,'Unreadable magic slot')
+   if h&lt;0x80000000 then local id=readInteger(slot+8);assert(id and id&gt;0 and id&lt;10000 and not r[id],'Invalid magic ID');r[id]=true;n=n+1 end
+  end
+ end
+ assert(n==count,'Magic collection count mismatch');return r,n
+end
+local function preserve(before,after)
+ for id in pairs(before) do assert(after[id],'An existing magic/ability was lost: '..id) end
+end
+local function samejobs(before,after)
+ preserve(before,after);preserve(after,before)
+end
+
+local category="歌曲"
+local requiredJob=12
+local spells={{461,195},{462,196},{463,197},{464,198},{465,199},{466,200},{467,201},{468,202}}
+
+local jobs=released()
+assert(jobs[requiredJob],category..'：對應職業尚未解鎖，已停止；沒有新增魔法。')
+local before=hashset('&lt;OwnedMagicList&gt;k__BackingField')
+local learned=hashset('&lt;LearnedAbilityList&gt;k__BackingField')
+-- Validate every collection before invoking the normal acquisition route.
+local client=instance('Last.Management','OwnedItemClient')
+local add=find('Last.Management','OwnedItemClient','AddAbility','System.Int32')
+local changed=0
+for _,v in ipairs(spells) do
+ if not before[v[1]] then call(add,client,{v[1]});changed=changed+1 end
+end
+local after=hashset('&lt;OwnedMagicList&gt;k__BackingField')
+local newlearned=hashset('&lt;LearnedAbilityList&gt;k__BackingField')
+for _,v in ipairs(spells) do assert(after[v[1]] and newlearned[v[2]],category..'學習結果不完整；請讀取修改前存檔。') end
+preserve(before,after);preserve(learned,newlearned);samejobs(jobs,released())
+print('MAGIC VERIFIED: '..category..', '..#spells..' spells; '..changed..' newly acquired; jobs preserved')
+
+showMessage(category.."已核對完成。請重開魔法／能力選單，確認後另存新欄位。取消勾選不會忘記已學魔法；可用等級仍依職業能力。")
+{$asm}
+[DISABLE]
+</AssemblerScript>
+    </CheatEntry>
+  </CheatEntries>
+  <UserdefinedSymbols />
+</CheatTable>
