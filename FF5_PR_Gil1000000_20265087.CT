@@ -1,0 +1,75 @@
+<?xml version='1.0' encoding='utf-8'?>
+<CheatTable CheatEngineTableVersion="45">
+  <CheatEntries>
+    <CheatEntry>
+      <ID>1</ID>
+      <Description>"金錢設為 1,000,000 Gil（地圖上執行一次）"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+local function find(ns,cls,name,signature)
+ local c=mono_findClass(ns,cls)
+ assert(c and c~=0,'Class missing: '..cls)
+ for _,m in ipairs(mono_class_enumMethods(c)) do
+  if m.name==name and (not signature or mono_method_getSignature(m.method)==signature) then return m.method end
+ end
+ error('Method missing: '..cls..'.'..name)
+end
+local function call(m,obj,args)
+ local r,e=mono_invoke_method(0,m,obj or 0,args or {})
+ assert(e==nil,tostring(e))
+ return r
+end
+local function instance(ns,cls)
+ local c=mono_findClass(ns,cls)
+ local obj=mono_object_new(c)
+ assert(obj and obj~=0,'Cannot create '..cls)
+ call(find(ns,cls,'.ctor',''),obj)
+ return obj
+end
+local function setup()
+ assert(getOpenedProcessID()~=0,'Attach to FINAL FANTASY V.exe first')
+ local base=getAddressSafe('GameAssembly.dll')
+ assert(base,'FF5 GameAssembly.dll missing')
+ local pe=base+readInteger(base+60)
+ assert(readInteger(pe+8)==1738631357 and readInteger(pe+80)==40267776,'This CT requires FF5 PR Steam build 20265087')
+ assert(LaunchMonoDataCollector(),'Mono collector unavailable')
+ local manager=call(find('Last.Management','UserDataManager','Instance',''))
+ assert(manager and manager~=0,'Load your save and stop on the map first')
+ return manager
+end
+
+local methodCache={}
+local function method(o,n,sig)
+ local c=mono_object_getClass(o)
+ local key=tostring(c)..':'..n..':'..tostring(sig)
+ if methodCache[key] then return methodCache[key] end
+ while c and c~=0 do
+  for _,v in ipairs(mono_class_enumMethods(c)) do
+   if v.name==n and (not sig or mono_method_getSignature(v.method)==sig) then methodCache[key]=v.method;return v.method end
+  end
+  c=mono_class_getParent(c)
+ end
+ error('Missing method '..n)
+end
+local function g(o,n,args,sig) assert(o and o~=0,'Missing object for '..n);return call(method(o,n,sig),o,args) end
+local u=setup()
+assert(g(u,'GetMemberData',{0})~=0,'Load a save and stop on the map first')
+
+local target=1000000
+local before=g(u,'get_OwendGil')
+assert(type(before)=='number' and before&gt;=0,'Invalid Gil')
+local client=instance('Last.Management','OwnedItemClient')
+if before&lt;target then g(client,'AddGil',{target-before}) elseif before&gt;target then g(client,'RemoveGil',{before-target}) end
+assert(g(u,'get_OwendGil')==target,'Gil verification failed')
+print('GIL VERIFIED: '..before..' -&gt; '..target)
+
+showMessage("修改完成，已核對結果。請重新開啟遊戲選單，確認後另存新欄位。取消勾選不會還原修改。")
+{$asm}
+[DISABLE]
+</AssemblerScript>
+    </CheatEntry>
+  </CheatEntries>
+  <UserdefinedSymbols />
+</CheatTable>

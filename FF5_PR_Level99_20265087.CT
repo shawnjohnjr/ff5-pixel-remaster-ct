@@ -1,0 +1,97 @@
+<?xml version='1.0' encoding='utf-8'?>
+<CheatTable CheatEngineTableVersion="45">
+  <CheatEntries>
+    <CheatEntry>
+      <ID>1</ID>
+      <Description>"目前隊伍全員角色等級99（同步經驗值與能力）（地圖上執行一次）"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+local function find(ns,cls,name,signature)
+ local c=mono_findClass(ns,cls)
+ assert(c and c~=0,'Class missing: '..cls)
+ for _,m in ipairs(mono_class_enumMethods(c)) do
+  if m.name==name and (not signature or mono_method_getSignature(m.method)==signature) then return m.method end
+ end
+ error('Method missing: '..cls..'.'..name)
+end
+local function call(m,obj,args)
+ local r,e=mono_invoke_method(0,m,obj or 0,args or {})
+ assert(e==nil,tostring(e))
+ return r
+end
+local function instance(ns,cls)
+ local c=mono_findClass(ns,cls)
+ local obj=mono_object_new(c)
+ assert(obj and obj~=0,'Cannot create '..cls)
+ call(find(ns,cls,'.ctor',''),obj)
+ return obj
+end
+local function setup()
+ assert(getOpenedProcessID()~=0,'Attach to FINAL FANTASY V.exe first')
+ local base=getAddressSafe('GameAssembly.dll')
+ assert(base,'FF5 GameAssembly.dll missing')
+ local pe=base+readInteger(base+60)
+ assert(readInteger(pe+8)==1738631357 and readInteger(pe+80)==40267776,'This CT requires FF5 PR Steam build 20265087')
+ assert(LaunchMonoDataCollector(),'Mono collector unavailable')
+ local manager=call(find('Last.Management','UserDataManager','Instance',''))
+ assert(manager and manager~=0,'Load your save and stop on the map first')
+ return manager
+end
+
+local methodCache={}
+local function method(o,n,sig)
+ local c=mono_object_getClass(o)
+ local key=tostring(c)..':'..n..':'..tostring(sig)
+ if methodCache[key] then return methodCache[key] end
+ while c and c~=0 do
+  for _,v in ipairs(mono_class_enumMethods(c)) do
+   if v.name==n and (not sig or mono_method_getSignature(v.method)==sig) then methodCache[key]=v.method;return v.method end
+  end
+  c=mono_class_getParent(c)
+ end
+ error('Missing method '..n)
+end
+local function g(o,n,args,sig) assert(o and o~=0,'Missing object for '..n);return call(method(o,n,sig),o,args) end
+local u=setup()
+assert(g(u,'GetMemberData',{0})~=0,'Load a save and stop on the map first')
+
+local members={}
+for i=0,3 do
+ local ch=g(u,'GetMemberData',{i});assert(ch and ch~=0,'Four party members required')
+ assert(g(ch,'GetExpTableGroupId')==1,'Unknown experience table')
+ members[#members+1]={id=g(ch,'get_Id'),job=g(ch,'get_JobId')}
+end
+local client=instance('Last.Management','OwnedCharacterClient')
+local sm=call(find('Last.Management','StatusUpProviderInstanceManager','Instance',''))
+local provider=g(sm,'GetCurrentProvider')
+assert(provider and provider~=0,'Level-up provider missing')
+local add=find('Last.Management','OwnedCharacterClient','AddExp','System.Int32,System.Int32,System.Int32')
+for i,v in ipairs(members) do
+ local ch=g(u,'GetMemberData',{i-1})
+ local before=g(g(ch,'get_Parameter'),'ConfirmedLevel')
+ local xp=g(ch,'get_CurrentExp')
+ if before&lt;99 then
+  local updated=call(add,client,{v.id,math.max(0,9696668-xp),12345})
+  assert(updated and updated~=0,'No upgraded character returned')
+  updated=g(provider,'Execution',{updated,12345,0})
+  assert(updated and updated~=0,'No level-up result')
+  g(client,'SetOwnedCharacter',{updated})
+ end
+ ch=g(u,'GetMemberData',{i-1});g(ch,'UpdateParameter')
+ local p=g(ch,'get_Parameter');local after=g(p,'ConfirmedLevel')
+ assert(after==99 and g(ch,'get_CurrentExp')&gt;=9696668,'Level verification failed')
+ assert(g(ch,'get_JobId')==v.job,'Job changed unexpectedly')
+ print('Character '..v.id..': Lv '..before..' -&gt; '..after..', EXP '..g(ch,'get_CurrentExp')..', MaxHP '..g(p,'ConfirmedMaxHp')..', MaxMP '..g(p,'ConfirmedMaxMp'))
+end
+print('LEVEL99 VERIFIED')
+
+showMessage("修改完成，已核對結果。請重新開啟遊戲選單，確認後另存新欄位。取消勾選不會還原修改。")
+{$asm}
+[DISABLE]
+</AssemblerScript>
+    </CheatEntry>
+  </CheatEntries>
+  <UserdefinedSymbols />
+</CheatTable>

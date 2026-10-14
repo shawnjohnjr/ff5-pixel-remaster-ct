@@ -1,0 +1,4 @@
+*.zip
+*.json
+work/
+.DS_Store
