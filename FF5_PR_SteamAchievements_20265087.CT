@@ -134,9 +134,9 @@ local readSteam=method(steamClass,'GetAllAchievementsOnPlatform','')
 local function states() return achievementStates(call(readSteam,steam)) end
 local before=states()
 local function execute(kind,target,prefix,label)
- local keys={[3]={'monster_hunt_100','monster_hunt_1000','monster_hunt_2000'},[4]={'picture_book_30','picture_book_151','picture_book_302'},[8]={'treasure_box_21','treasure_box_112','treasure_box_225'},[5]={'area_visit'},[11]={'get_hidden_item'}}
+ local keys={[3]={'monster_hunt_100','monster_hunt_1000','monster_hunt_2000'},[4]={'picture_book_30','picture_book_151','picture_book_302'},[8]={'treasure_box_21','treasure_box_112','treasure_box_225'},[5]={'area_visit'},[11]={'get_hidden_item'},[21]={'piano_master'}}
  local selected=assert(keys[kind],'Unsupported achievement family')
- assert((kind==3 and target==2000 and prefix=='monster_hunt_') or (kind==4 and target==302 and prefix=='picture_book_') or (kind==8 and target==225 and prefix=='treasure_box_') or (kind==5 and target==1 and prefix=='area_visit') or (kind==11 and target==1 and prefix=='get_hidden_item'),'Invalid target')
+ assert((kind==3 and target==2000 and prefix=='monster_hunt_') or (kind==4 and target==302 and prefix=='picture_book_') or (kind==8 and target==225 and prefix=='treasure_box_') or (kind==5 and target==1 and prefix=='area_visit') or (kind==11 and target==1 and prefix=='get_hidden_item') or (kind==21 and target==1 and prefix=='piano_master'),'Invalid target')
  for _,k in ipairs(selected) do assert(before[k]~=nil,'Missing expected achievement '..k) end
  local a=call(targets,ach,{kind,0});assert(a and a&gt;65536 and readInteger(a+24)==#selected,'Unexpected achievement target count')
  local n=call(get,ach,{kind,0});assert(type(n)=='number' and n&gt;=0 and n&lt;=2147483647,'Invalid progress')
@@ -298,9 +298,9 @@ local readSteam=method(steamClass,'GetAllAchievementsOnPlatform','')
 local function states() return achievementStates(call(readSteam,steam)) end
 local before=states()
 local function execute(kind,target,prefix,label)
- local keys={[3]={'monster_hunt_100','monster_hunt_1000','monster_hunt_2000'},[4]={'picture_book_30','picture_book_151','picture_book_302'},[8]={'treasure_box_21','treasure_box_112','treasure_box_225'},[5]={'area_visit'},[11]={'get_hidden_item'}}
+ local keys={[3]={'monster_hunt_100','monster_hunt_1000','monster_hunt_2000'},[4]={'picture_book_30','picture_book_151','picture_book_302'},[8]={'treasure_box_21','treasure_box_112','treasure_box_225'},[5]={'area_visit'},[11]={'get_hidden_item'},[21]={'piano_master'}}
  local selected=assert(keys[kind],'Unsupported achievement family')
- assert((kind==3 and target==2000 and prefix=='monster_hunt_') or (kind==4 and target==302 and prefix=='picture_book_') or (kind==8 and target==225 and prefix=='treasure_box_') or (kind==5 and target==1 and prefix=='area_visit') or (kind==11 and target==1 and prefix=='get_hidden_item'),'Invalid target')
+ assert((kind==3 and target==2000 and prefix=='monster_hunt_') or (kind==4 and target==302 and prefix=='picture_book_') or (kind==8 and target==225 and prefix=='treasure_box_') or (kind==5 and target==1 and prefix=='area_visit') or (kind==11 and target==1 and prefix=='get_hidden_item') or (kind==21 and target==1 and prefix=='piano_master'),'Invalid target')
  for _,k in ipairs(selected) do assert(before[k]~=nil,'Missing expected achievement '..k) end
  local a=call(targets,ach,{kind,0});assert(a and a&gt;65536 and readInteger(a+24)==#selected,'Unexpected achievement target count')
  local n=call(get,ach,{kind,0});assert(type(n)=='number' and n&gt;=0 and n&lt;=2147483647,'Invalid progress')
@@ -462,9 +462,9 @@ local readSteam=method(steamClass,'GetAllAchievementsOnPlatform','')
 local function states() return achievementStates(call(readSteam,steam)) end
 local before=states()
 local function execute(kind,target,prefix,label)
- local keys={[3]={'monster_hunt_100','monster_hunt_1000','monster_hunt_2000'},[4]={'picture_book_30','picture_book_151','picture_book_302'},[8]={'treasure_box_21','treasure_box_112','treasure_box_225'},[5]={'area_visit'},[11]={'get_hidden_item'}}
+ local keys={[3]={'monster_hunt_100','monster_hunt_1000','monster_hunt_2000'},[4]={'picture_book_30','picture_book_151','picture_book_302'},[8]={'treasure_box_21','treasure_box_112','treasure_box_225'},[5]={'area_visit'},[11]={'get_hidden_item'},[21]={'piano_master'}}
  local selected=assert(keys[kind],'Unsupported achievement family')
- assert((kind==3 and target==2000 and prefix=='monster_hunt_') or (kind==4 and target==302 and prefix=='picture_book_') or (kind==8 and target==225 and prefix=='treasure_box_') or (kind==5 and target==1 and prefix=='area_visit') or (kind==11 and target==1 and prefix=='get_hidden_item'),'Invalid target')
+ assert((kind==3 and target==2000 and prefix=='monster_hunt_') or (kind==4 and target==302 and prefix=='picture_book_') or (kind==8 and target==225 and prefix=='treasure_box_') or (kind==5 and target==1 and prefix=='area_visit') or (kind==11 and target==1 and prefix=='get_hidden_item') or (kind==21 and target==1 and prefix=='piano_master'),'Invalid target')
  for _,k in ipairs(selected) do assert(before[k]~=nil,'Missing expected achievement '..k) end
  local a=call(targets,ach,{kind,0});assert(a and a&gt;65536 and readInteger(a+24)==#selected,'Unexpected achievement target count')
  local n=call(get,ach,{kind,0});assert(type(n)=='number' and n&gt;=0 and n&lt;=2147483647,'Invalid progress')
@@ -626,9 +626,9 @@ local readSteam=method(steamClass,'GetAllAchievementsOnPlatform','')
 local function states() return achievementStates(call(readSteam,steam)) end
 local before=states()
 local function execute(kind,target,prefix,label)
- local keys={[3]={'monster_hunt_100','monster_hunt_1000','monster_hunt_2000'},[4]={'picture_book_30','picture_book_151','picture_book_302'},[8]={'treasure_box_21','treasure_box_112','treasure_box_225'},[5]={'area_visit'},[11]={'get_hidden_item'}}
+ local keys={[3]={'monster_hunt_100','monster_hunt_1000','monster_hunt_2000'},[4]={'picture_book_30','picture_book_151','picture_book_302'},[8]={'treasure_box_21','treasure_box_112','treasure_box_225'},[5]={'area_visit'},[11]={'get_hidden_item'},[21]={'piano_master'}}
  local selected=assert(keys[kind],'Unsupported achievement family')
- assert((kind==3 and target==2000 and prefix=='monster_hunt_') or (kind==4 and target==302 and prefix=='picture_book_') or (kind==8 and target==225 and prefix=='treasure_box_') or (kind==5 and target==1 and prefix=='area_visit') or (kind==11 and target==1 and prefix=='get_hidden_item'),'Invalid target')
+ assert((kind==3 and target==2000 and prefix=='monster_hunt_') or (kind==4 and target==302 and prefix=='picture_book_') or (kind==8 and target==225 and prefix=='treasure_box_') or (kind==5 and target==1 and prefix=='area_visit') or (kind==11 and target==1 and prefix=='get_hidden_item') or (kind==21 and target==1 and prefix=='piano_master'),'Invalid target')
  for _,k in ipairs(selected) do assert(before[k]~=nil,'Missing expected achievement '..k) end
  local a=call(targets,ach,{kind,0});assert(a and a&gt;65536 and readInteger(a+24)==#selected,'Unexpected achievement target count')
  local n=call(get,ach,{kind,0});assert(type(n)=='number' and n&gt;=0 and n&lt;=2147483647,'Invalid progress')
@@ -790,9 +790,9 @@ local readSteam=method(steamClass,'GetAllAchievementsOnPlatform','')
 local function states() return achievementStates(call(readSteam,steam)) end
 local before=states()
 local function execute(kind,target,prefix,label)
- local keys={[3]={'monster_hunt_100','monster_hunt_1000','monster_hunt_2000'},[4]={'picture_book_30','picture_book_151','picture_book_302'},[8]={'treasure_box_21','treasure_box_112','treasure_box_225'},[5]={'area_visit'},[11]={'get_hidden_item'}}
+ local keys={[3]={'monster_hunt_100','monster_hunt_1000','monster_hunt_2000'},[4]={'picture_book_30','picture_book_151','picture_book_302'},[8]={'treasure_box_21','treasure_box_112','treasure_box_225'},[5]={'area_visit'},[11]={'get_hidden_item'},[21]={'piano_master'}}
  local selected=assert(keys[kind],'Unsupported achievement family')
- assert((kind==3 and target==2000 and prefix=='monster_hunt_') or (kind==4 and target==302 and prefix=='picture_book_') or (kind==8 and target==225 and prefix=='treasure_box_') or (kind==5 and target==1 and prefix=='area_visit') or (kind==11 and target==1 and prefix=='get_hidden_item'),'Invalid target')
+ assert((kind==3 and target==2000 and prefix=='monster_hunt_') or (kind==4 and target==302 and prefix=='picture_book_') or (kind==8 and target==225 and prefix=='treasure_box_') or (kind==5 and target==1 and prefix=='area_visit') or (kind==11 and target==1 and prefix=='get_hidden_item') or (kind==21 and target==1 and prefix=='piano_master'),'Invalid target')
  for _,k in ipairs(selected) do assert(before[k]~=nil,'Missing expected achievement '..k) end
  local a=call(targets,ach,{kind,0});assert(a and a&gt;65536 and readInteger(a+24)==#selected,'Unexpected achievement target count')
  local n=call(get,ach,{kind,0});assert(type(n)=='number' and n&gt;=0 and n&lt;=2147483647,'Invalid progress')
@@ -816,6 +816,170 @@ local function execute(kind,target,prefix,label)
 end
 
 execute(11,1,"get_hidden_item","獲得所有隱藏道具")
+
+{$asm}
+[DISABLE]
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>6</ID>
+      <Description>"僅解鎖 Steam：鋼琴大師（保留遊戲紀錄；同類低階成就連動）"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>[ENABLE]
+{$lua}
+if syntaxcheck then return end
+local FF5_ACHIEVEMENTS_READ_ONLY=false
+local FF5_ACHIEVEMENTS_SILENT=false
+assert(getOpenedProcessID()~=0,'Attach to FINAL FANTASY V.exe')
+local base=getAddressSafe('GameAssembly.dll');assert(base,'GameAssembly.dll missing')
+local pe=base+readInteger(base+60)
+assert(readInteger(pe+8)==1738631357 and readInteger(pe+80)==40267776,'Requires FF5 PR Steam build 20265087')
+assert(LaunchMonoDataCollector(),'Mono collector unavailable')
+local classes,fields,methods={},{},{}
+local function cls(ns,n)
+ local k=ns..'.'..n
+ if not classes[k] then local c=mono_findClass(ns,n);assert(c and c~=0,'Missing class '..k);classes[k]=c end
+ return classes[k]
+end
+local function fld(c,n,t)
+ if not fields[c] then fields[c]=assert(mono_class_enumFields(c,true)) end
+ for _,v in ipairs(fields[c]) do if v.name==n then assert(not t or v.typename==t,'Field type mismatch: '..n);return v end end
+ error('Missing field '..n)
+end
+local function method(c,n,sig)
+ if not methods[c] then methods[c]=assert(mono_class_enumMethods(c)) end
+ for _,v in ipairs(methods[c]) do if v.name==n and mono_method_getSignature(v.method)==sig then return v.method end end
+ error('Missing method '..n..' ('..sig..')')
+end
+local function call(m,o,args)
+ local r,e=mono_invoke_method(0,m,o or 0,args or {});assert(e==nil,tostring(e));return r
+end
+local function ptr(a,c)
+ local p=readPointer(a);assert(p and p&gt;65536,'Invalid pointer')
+ if c then assert(readPointer(p)==c,'Unexpected object type') end
+ return p
+end
+local function singleton(c)
+ local p=mono_class_getStaticFieldValue(c,fld(c,'instance').field)
+ assert(p and p&gt;65536 and readPointer(p)==c,'Missing initialized singleton');return p
+end
+local function textValue(p)
+ if type(p)=='string' then return p end
+ assert(p and p&gt;65536,'Missing string')
+ local n=readInteger(p+16);assert(n and n&gt;0 and n&lt;=256,'Invalid achievement name')
+ return assert(readString(p+20,n*2,true))
+end
+local function achievementStates(o)
+ local c=readPointer(o)
+ local n=readInteger(o+fld(c,'count','System.Int32').offset)
+ local free=readInteger(o+fld(c,'freeCount','System.Int32').offset)
+ assert(n and n&gt;=0 and n&lt;=128 and free and free&gt;=0 and free&lt;=n,'Invalid achievement dictionary')
+ assert(n-free==39,'Expected all 39 FF5 Steam achievements')
+ local a=ptr(o+fld(c,'entries').offset);local cap=readInteger(a+24)
+ assert(cap and cap&gt;=n and cap&lt;=512,'Invalid achievement capacity')
+ local r={};local count=0
+ for i=0,n-1 do
+  local e=a+32+i*24;local h=readInteger(e)
+  if h and h&lt;2147483648 then
+   local k=textValue(ptr(e+8));local v=readInteger(e+16)
+   assert(not r[k] and (v==0 or v==1),'Invalid Steam achievement entry')
+   r[k]=v;count=count+1
+  end
+ end
+ assert(count==39,'Incomplete Steam achievement states');return r
+end
+local preserved={}
+local function capture(address,size,label)
+ local bytes=assert(readBytes(address,size,true),'Cannot snapshot '..label)
+ assert(#bytes==size,'Incomplete snapshot '..label)
+ preserved[#preserved+1]={address=address,bytes=bytes,label=label}
+end
+local function intArray(a,label,max,stride)
+ local n=readInteger(a+24);assert(n and n&gt;=0 and n&lt;=max,'Invalid array '..label)
+ capture(a+24,8,label..' length')
+ if n&gt;0 then capture(a+32,n*(stride or 4),label) end
+end
+local um=cls('Last.Management','UserDataManager');local u=singleton(um)
+local us=cls('Last.Data.User','UserSaveData');local save=ptr(u+fld(um,'saveData').offset,us)
+local sizes={['System.Int32']=4,['System.Boolean']=1,['System.Double']=8}
+for _,v in ipairs(mono_class_enumFields(us,true)) do
+ if not v.isStatic and v.name~='playTime' and sizes[v.typename] then capture(save+v.offset,sizes[v.typename],'save '..v.name) end
+end
+local kills=readInteger(save+fld(us,'monstersKilledCount','System.Int32').offset)
+local chests=readInteger(save+fld(us,'openChestCount','System.Int32').offset)
+assert(kills and kills&gt;=0 and chests and chests&gt;=0 and chests&lt;=225,'Invalid loaded-save counters')
+local chars=ptr(u+fld(um,'&lt;OwnedCharacterList&gt;k__BackingField').offset)
+local charCount=readInteger(chars+24);assert(charCount and charCount&gt;0 and charCount&lt;=16,'Load a save first')
+local charArray=ptr(chars+16);local cc=cls('Last.Data.User','OwnedCharacterData');local cs=cls('Last.Data.User','OwnedCharacterSaveData')
+for i=0,charCount-1 do
+ local ch=ptr(charArray+32+i*8,cc);local s=ptr(ch+fld(cc,'saveData').offset,cs)
+ for _,v in ipairs(mono_class_enumFields(cs,true)) do
+  if not v.isStatic and sizes[v.typename] then capture(s+v.offset,sizes[v.typename],'character '..i..' '..v.name) end
+ end
+end
+local bmClass=cls('Last.Management','PictureBookSaveManager');local bm=singleton(bmClass)
+local sdClass=cls('Last.Systems.Save','PictureBookSaveData')
+local sd=ptr(bm+fld(bmClass,'&lt;SaveData&gt;k__BackingField').offset,sdClass)
+capture(sd+fld(sdClass,'totalSubjugationCount','System.Int32').offset,4,'bestiary total kills')
+local defeats=ptr(sd+fld(sdClass,'&lt;MonsterDefeats&gt;k__BackingField').offset)
+local dictClass=readPointer(defeats)
+local count=readInteger(defeats+fld(dictClass,'count','System.Int32').offset)
+assert(count and count&gt;=0 and count&lt;=1024,'Invalid bestiary dictionary')
+capture(defeats+fld(dictClass,'count').offset,4,'bestiary dictionary count')
+capture(defeats+fld(dictClass,'freeCount').offset,4,'bestiary free count')
+if count&gt;0 then intArray(ptr(defeats+fld(dictClass,'entries').offset),'bestiary defeat records',2048,16) end
+local dc=cls('Last.Interpreter','DataStorage');local data=singleton(dc)
+for _,name in ipairs({'scenario','treasure'}) do
+ local flags=ptr(data+fld(dc,name).offset);local fc=readPointer(flags)
+ intArray(ptr(flags+fld(fc,'bits','System.UInt32[]').offset),name..' flags',4096)
+end
+for _,name in ipairs({'global','area','map','script'}) do
+ intArray(ptr(data+fld(dc,name,'System.Int32[]').offset),name..' variables',16384)
+end
+local function verifyPreserved()
+ assert(singleton(um)==u and ptr(u+fld(um,'saveData').offset,us)==save,'Save changed during operation')
+ for _,v in ipairs(preserved) do
+  local now=assert(readBytes(v.address,#v.bytes,true),'Cannot verify '..v.label)
+  for i,b in ipairs(v.bytes) do assert(now[i]==b,'Game data changed: '..v.label..'; remain idle on the map') end
+ end
+end
+local steamClass=cls('Last.Management','SteamSDKManager');local steam=singleton(steamClass)
+assert(readBytes(steam+fld(steamClass,'isInitialze','System.Boolean').offset,1)==1,'Steam must be initialized')
+local ac=cls('Last.Management','AchievementManager');local ach=singleton(ac)
+local set=method(ac,'SetProgress','Last.Management.AchievementManager.Type,System.Int32,System.Int32,System.Boolean')
+local get=method(ac,'GetProgress','Last.Management.AchievementManager.Type,System.Int32')
+local targets=method(ac,'GetTargets','Last.Management.AchievementManager.Type,System.Int32')
+local upload=method(ac,'UploadUserStats','')
+local readSteam=method(steamClass,'GetAllAchievementsOnPlatform','')
+local function states() return achievementStates(call(readSteam,steam)) end
+local before=states()
+local function execute(kind,target,prefix,label)
+ local keys={[3]={'monster_hunt_100','monster_hunt_1000','monster_hunt_2000'},[4]={'picture_book_30','picture_book_151','picture_book_302'},[8]={'treasure_box_21','treasure_box_112','treasure_box_225'},[5]={'area_visit'},[11]={'get_hidden_item'},[21]={'piano_master'}}
+ local selected=assert(keys[kind],'Unsupported achievement family')
+ assert((kind==3 and target==2000 and prefix=='monster_hunt_') or (kind==4 and target==302 and prefix=='picture_book_') or (kind==8 and target==225 and prefix=='treasure_box_') or (kind==5 and target==1 and prefix=='area_visit') or (kind==11 and target==1 and prefix=='get_hidden_item') or (kind==21 and target==1 and prefix=='piano_master'),'Invalid target')
+ for _,k in ipairs(selected) do assert(before[k]~=nil,'Missing expected achievement '..k) end
+ local a=call(targets,ach,{kind,0});assert(a and a&gt;65536 and readInteger(a+24)==#selected,'Unexpected achievement target count')
+ local n=call(get,ach,{kind,0});assert(type(n)=='number' and n&gt;=0 and n&lt;=2147483647,'Invalid progress')
+ verifyPreserved()
+ print('BEFORE',label,'achievement progress',n,'game kills',kills,'game chests',chests)
+ if FF5_ACHIEVEMENTS_READ_ONLY then
+  for _,k in ipairs(selected) do print(k,before[k]) end
+  print('ACHIEVEMENT PREFLIGHT VERIFIED',label);return
+ end
+ if before[selected[#selected]]~=1 then
+  call(set,ach,{kind,math.max(n,target),0,{type=vtByte,value=0}})
+  call(upload,ach)
+ end
+ verifyPreserved()
+ local after=states()
+ for k,v in pairs(before) do if k:sub(1,#prefix)~=prefix then assert(after[k]==v,'Unrelated Steam achievement changed: '..k) end end
+ for _,k in ipairs(selected) do print('AFTER',k,after[k]) end
+ assert(after[selected[#selected]]==1,'Steam has not confirmed the target; check Steam before retrying')
+ print('ACHIEVEMENT VERIFIED',label,'game records preserved',#preserved,'snapshots')
+ if not FF5_ACHIEVEMENTS_SILENT then showMessage(label..' Steam 成就已確認。遊戲內圖鑑、寶箱旗標與擊倒數保留；同類低階成就可能一併解鎖。取消勾選不會撤回 Steam 成就。') end
+end
+
+execute(21,1,"piano_master","鋼琴大師")
 
 {$asm}
 [DISABLE]
